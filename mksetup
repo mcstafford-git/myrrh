@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+
+# this script dynamically re-writes myrrh-setup.sql based 
+# upon myrrh.conf and the files present beneath sql/.
+
+myrrhdir=$( cd "$( dirname "${BASH_SOURCE[0]}" )"; pwd; )
+setup="${myrrhdir}/myrrh-setup.sql"
+
+source "${myrrhdir}/myrrh.conf"
+
+cat << EOF > "${setup}"
+-- avoid trouble with schema, charset and collation
+select '# configuring db ${myrrh_db} and current connection' info;
+create schema if not exists ${myrrh_db};
+alter schema ${myrrh_db}
+  character set = ${charset_name}
+  collate = ${collation_name};
+use ${myrrh_db};
+set character_set_client = ${charset_name}, collation_connection = ${collation_name};
+
+-- create myrrh-specific db user with three random timestamps as its password
+select '# creating user ${definer}' info;
+set @ts := 'current_timestamp() -interval round(rand()*60*60*24*365*45,0) second';
+set @c := ',', @q := '''';
+set @s := concat( @q, ' ', @q );
+set @ts := concat( @ts,@c,@s,@c,@ts,@c,@s,@c,@ts );
+set @sql := concat( 'set @myrrh_passwd := concat( ', @ts, ')' );
+prepare stmt from @sql;
+execute stmt;
+drop prepare stmt;
+set @sql := concat(
+  'grant all privileges on *.* to ', '${definer}'
+, ' identified by ',@q,@myrrh_passwd,@q,' with grant option'
+);
+-- uncomment this next line if you want a record of the password
+-- select concat( '-- ${definer} in ${myrrh_db} identified by ''',@myrrh_passwd,'''' ) shh;
+prepare stmt from @sql;
+execute stmt;
+drop prepare stmt;
+set @sql := null;
+
+EOF
+
+for c in table routine content view; do
+  echo "select '# running ${c} file(s) ' info;" >> "${setup}"
+  [[ -d "${myrrhdir}/sql/${c}" ]] && c+="/"
+  for f in sql/${c}*; do
+    [[ 'myrrh@localhost' != "${definer}" ]] \
+      && perl -pi -e "s/myrrh@localhost/${definer}/g" "${f}"
+    echo "source ${f};" >> "${setup}"
+  done
+  echo >> "${setup}"
+done
+
+cat << EOF >> "${setup}"
+
+select '# status check' info;
+
+select
+  t.variable_name
+, '${charset_name}' expectation
+, t.variable_value result
+from information_schema.session_variables t
+where t.variable_name in( 'CHARACTER_SET_CONNECTION' ,'CHARACTER_SET_RESULTS' ,'CHARACTER_SET_DATABASE' ,'CHARACTER_SET_CLIENT' )
+union
+select
+  t.variable_name
+, '${collation_name}' expectation
+, t.variable_value result
+from information_schema.session_variables t
+where t.variable_name in( 'COLLATION_DATABASE' ,'COLLATION_CONNECTION' )
+union
+select 'MYRRH_DB'
+, '${myrrh_db}'
+, schema();
+
+show create database ${myrrh_db};
+
+show grants for ${definer};
+
+select t.table_name, t.table_type, t.table_collation, t.table_rows
+from information_schema.tables t
+where t.table_schema = '${myrrh_db}';
+
+select concat( @@version_comment,' ',@@version ) mysql_version;
+
+EOF
+
+echo "# rewrote $( basename "${setup}" ), it's ready for your use"
+

@@ -1,0 +1,21 @@
+DROP PROCEDURE IF EXISTS list_dbs;
+
+DELIMITER //
+
+CREATE definer=myrrh@localhost
+PROCEDURE list_dbs(
+)
+COMMENT ''
+LANGUAGE SQL
+NOT DETERMINISTIC
+READS SQL DATA
+SQL SECURITY DEFINER
+begin
+
+select * from dbs;
+
+end;
+//
+
+DELIMITER ;
+

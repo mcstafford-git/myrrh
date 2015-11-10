@@ -1,0 +1,45 @@
+
+-- the transpose phrase only needs to be re-generated as often as:
+-- 1) structural changes are made to the priv-related mysql.user or mysql.db
+-- 2) content is changed in myrrh privs
+
+set @i := 0;
+
+-- note, add row for usage, column, with grant option
+select
+  concat(
+     ''
+    ,case @i := @i +1 when 1 then 'insert ignore into reverse( role_name,db_name,priv_name )' else 'union' end
+    ,' select l_role_name, ''*'' db_name, '''
+    ,p.priv_name,''' priv_name from mysql.'
+    ,c.table_name,' t where t.user = p_user_name and t.'
+    ,lower(c.column_name),' = ''Y'''
+  ) some_sql
+from
+  privs p
+join
+  information_schema.columns c using ( column_name )
+where c.table_schema = 'mysql'
+and c.table_name = 'user'
+and c.column_name like '%priv'
+and p.priv_type in( 'user','meta' )
+union
+select distinct
+  concat(
+    'union select l_role_name, t.db db_name, '''
+    ,p.priv_name,''' priv_name from mysql.'
+    ,c.table_name,' t where t.user = p_user_name '
+    ,'and t.',lower(c.column_name),' = ''Y'''
+    ,' and t.db = p_db_name'
+  ) some_sql
+from
+  privs p
+join
+  information_schema.columns c using ( column_name )
+where c.table_schema = 'mysql'
+and c.table_name = 'db'
+and c.column_name like '%priv'
+and find_in_set( 'db' , p.priv_type ) > 0
+-- into outfile '/tmp/myrrh_reverse.sql'
+;
+

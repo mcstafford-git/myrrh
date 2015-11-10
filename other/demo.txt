@@ -1,0 +1,78 @@
+Here is a summary of the demo roles and their privileges.
+[figure 1]
+
+     +-------+
+     | admin |
+     +-------+ 
+     |       |
+ +---+---+   |  +-----------+
+ |  dev  |   +--+ load      |
+ +---+---+   |  +-----------+
+     |       |
+ +---+---+   |  +-----------+
+ | edit  |   +--+ replicate |
+ +---+---+   |  +-----------+
+     |       |
+ +---+---+   |  +-----------+
+ | see   |   +--+ support   |
+ +-------+      +-----------+
+
+The roles on the left encompass each other, e.g., edit contains see. On
+the right, load, etc. are connected only to admin.
+
+role      privileges
+admin     support+dev+load+replicate
+load      file,insert
+replicate replication client,replication slave
+dev       edit+show databases,alter,alter routine,create,create routine
+          ,create view,drop,event,index,references,show view,trigger
+support   see+lock tables,process,reload,shutdown,super
+edit      see+delete,insert,update
+see       select,create temporary tables
+
+-- creating data for the demo
+[figure 2]
++-------------+--------+--------+------+
+|  concept    |  role  |  user  |  db  |
++-------------+--------+--------+------+
+|  see        |  r0    |  u0    |  d0  |
+|  support    |  r1    |  u1    |  d1  |
+|  load       |  r2    |  u2    |  d2  |
+|  edit       |  r3    |  u3    |  d3  |
+|  dev        |  r4    |  u4    |  d4  |
+|  replicate  |  r5    |  u5    |  d5  |
+|  admin      |  r6    |  u6    |  d6  |
++-------------+--------+--------+------+
+
+The content of demo-0.sql (and its subscripts) produces:
+  The initial result, tying to the data in figure 2.
+
+  > call preview_user( 'u6' );
+
+    GRANT reload, shutdown, process, file, show databases, super, replication client, replication slave ON *.*
+      TO 'u6'@'%' IDENTIFIED BY PASSWORD '*03165C6F4C2571C068FD6624E344CFB70DF6676B' /* via r1,r2,r4,r5 */;
+    GRANT select, create temporary tables ON `d0`.* TO 'u6'@'%' /* via r0 */;
+    GRANT select, lock tables ON `d1`.* TO 'u6'@'%' /* via r1 */;
+    GRANT select, insert ON `d2`.* TO 'u6'@'%' /* via r2 */;
+    GRANT select, insert, update, delete ON `d3`.* TO 'u6'@'%' /* via r3 */;
+    GRANT select, drop, references, index, alter, create view, show view, create routine, alter routine, event, trigger
+      ON `d4`.* TO 'u6'@'%' /* via r4 */;
+    GRANT select ON `d5`.* TO 'u6'@'%' /* via r5 */;
+    GRANT select ON `d6`.* TO 'u6'@'%' /* via r6 */;
+
+  Then, after renaming (and aligning with figure 1) the users and roles:
+  ( r6 becomes admin, u6 becomes administrator, r0:see, u0:seer, etc. )
+
+  > call preview_user( 'administrator' );
+
+    GRANT reload, shutdown, process, file, show databases, super, replication client, replication slave ON *.*
+      TO 'administrator'@'%' IDENTIFIED BY PASSWORD '*03165C6F4C2571C068FD6624E344CFB70DF6676B' /* via dev,load,replicate,support */;
+    GRANT select, create temporary tables ON `d0`.* TO 'administrator'@'%' /* via see */;
+    GRANT select, lock tables ON `d1`.* TO 'administrator'@'%' /* via support */;
+    GRANT select, insert ON `d2`.* TO 'administrator'@'%' /* via load */;
+    GRANT select, insert, update, delete ON `d3`.* TO 'administrator'@'%' /* via edit */;
+    GRANT select, drop, references, index, alter, create view, show view, create routine, alter routine, event, trigger
+      ON `d4`.* TO 'administrator'@'%' /* via dev */;
+    GRANT select ON `d5`.* TO 'administrator'@'%' /* via replicate */;
+    GRANT select ON `d6`.* TO 'administrator'@'%' /* via admin */;
+
