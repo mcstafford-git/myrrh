@@ -39,5 +39,6 @@ TODO:
   - drop_*
   - implement remainder of changes to status
   - split out implementation of apply routines
+  - crosstab report for role differentiation
 
 
